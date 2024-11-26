@@ -8,7 +8,7 @@ from .core.strategy import JWTStrategy
 
 auth_manager = AuthManager(
     AuthBackend(
-        CookieTransport(),
+        CookieTransport(cookie_same_site="none"),
         JWTStrategy(JWT_SECRET)
     )
 )
