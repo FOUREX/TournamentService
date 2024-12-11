@@ -2,16 +2,16 @@ from typing import Optional, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, insert
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_async_session
 from src.auth import auth_manager
 from src.users.models import UserORM
-from src.users.schemas import SUser
 
 from .models import TeamORM, TeamMemberORM
 from .schemas import STeam, STeamAdd, STeamMember
-from .enums import TeamMemberRole
+from .enums import ETeamMemberRole
 
 
 team_router = APIRouter(prefix="/team", tags=["Teams"])
@@ -21,51 +21,46 @@ routers = (team_router, teams_router)
 
 
 @team_router.get("/", response_model=Optional[STeam])
-async def get_team(session: Annotated[AsyncSession, Depends(get_async_session)],
-                   id: int | None = None, name: str | None = None):
+async def get_team(
+        session: Annotated[AsyncSession, Depends(get_async_session)],
+        id: int | None = None, name: str | None = None
+):
     if id is not None:
-        query = select(TeamORM).where(TeamORM.id == id).limit(1)
+        params = TeamORM.id == id
     elif name is not None:
-        query = select(TeamORM).where(TeamORM.name.ilike(name)).limit(1)
+        params = TeamORM.name.ilike(name)
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An ID or name is required"
         )
 
-    team = (await session.execute(query)).scalar_one_or_none()
+    team = (await session.execute(
+        select(
+            TeamORM
+        ).options(
+            joinedload(
+                TeamORM.members
+            ).joinedload(
+                TeamMemberORM.user
+            )
+        ).where(
+            params
+        )
+    )).unique().scalar_one_or_none()
 
     if team is None:
         return None
 
-    team_members = (await session.execute(
-        select(
-            TeamMemberORM, UserORM
-        ).join(
-            UserORM, UserORM.id == TeamMemberORM.member_id
-        ).where(
-            TeamMemberORM.team_id == team.id
-        )
-    )).all()
-
-    schema = STeam(
-        **team.__dict__,
-        members=[
-            STeamMember(
-                user=SUser.from_orm(user),
-                **member.__dict__
-            )
-            for member, user in team_members
-        ]
-    )
-
-    return schema
+    return team
 
 
 @team_router.post("/", response_model=STeam)
-async def post_team(session: Annotated[AsyncSession, Depends(get_async_session)],
-                    current_user: Annotated[UserORM, Depends(auth_manager.current_user)],
-                    team: STeamAdd):
+async def post_team(
+        session: Annotated[AsyncSession, Depends(get_async_session)],
+        current_user: Annotated[UserORM, Depends(auth_manager.current_user)],
+        team: STeamAdd
+):
     query = select(TeamORM).where(TeamORM.name.ilike(team.name))
 
     if (await session.execute(query)).first() is not None:
@@ -85,7 +80,7 @@ async def post_team(session: Annotated[AsyncSession, Depends(get_async_session)]
     # TODO: Add members from team.members_ids
 
     await session.execute(
-        insert(TeamMemberORM).values(team_id=created_team_id, member_id=current_user.id, role=TeamMemberRole.owner)
+        insert(TeamMemberORM).values(team_id=created_team_id, member_id=current_user.id, role=ETeamMemberRole.OWNER)
     )
 
     await session.commit()
@@ -94,9 +89,11 @@ async def post_team(session: Annotated[AsyncSession, Depends(get_async_session)]
 
 
 @team_router.post("/member", response_model=STeamMember)  # TODO: Тільки власник може додавати адмінів
-async def post_team_member(session: Annotated[AsyncSession, Depends(get_async_session)],
-                           current_user: Annotated[UserORM, Depends(auth_manager.current_user)],
-                           team_id: int, user_id: int, role: int = TeamMemberRole.member):
+async def post_team_member(
+        session: Annotated[AsyncSession, Depends(get_async_session)],
+        current_user: Annotated[UserORM, Depends(auth_manager.current_user)],
+        team_id: int, user_id: int, role: int = ETeamMemberRole.MEMBER
+):
     team = (await session.execute(
         select(TeamORM).where(TeamORM.id == team_id).limit(1)
     )).scalar_one_or_none()
@@ -109,7 +106,7 @@ async def post_team_member(session: Annotated[AsyncSession, Depends(get_async_se
 
     team_administrators_ids, team_administrators_roles = zip(*(await session.execute(
         select(TeamMemberORM.member_id, TeamMemberORM.role).where(
-            TeamMemberORM.team_id == team_id, TeamMemberORM.role <= TeamMemberRole.admin
+            TeamMemberORM.team_id == team_id, TeamMemberORM.role <= ETeamMemberRole.ADMIN
         )
     )).all())
 
@@ -120,21 +117,21 @@ async def post_team_member(session: Annotated[AsyncSession, Depends(get_async_se
         )
 
     if (
-        role <= TeamMemberRole.admin and
-        team_administrators_roles[team_administrators_ids.index(current_user.id)] != TeamMemberRole.owner
+        role <= ETeamMemberRole.ADMIN and
+        team_administrators_roles[team_administrators_ids.index(current_user.id)] != ETeamMemberRole.OWNER
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can add an administrator to the team"
         )
 
-    if role == TeamMemberRole.owner:
+    if role == ETeamMemberRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A team cannot have more than one owner"
         )
 
-    if role not in TeamMemberRole.__members__.values():
+    if role not in ETeamMemberRole.__members__.values():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid role"
@@ -178,30 +175,20 @@ async def post_team_member(session: Annotated[AsyncSession, Depends(get_async_se
     )
 
 
-@team_router.post("/members")
-async def post_team_members(session: Annotated[AsyncSession, Depends(get_async_session)],
-                            current_user: Annotated[UserORM, Depends(auth_manager.current_user)],
-                            team_id: int, user_ids: list[int]):
-    ...
-
-
-@teams_router.get("/", response_model=list[STeam])  # TODO: Зробить нормально; маладец, зробив
-async def get_teams(session: Annotated[AsyncSession, Depends(get_async_session)]):
-    teams = (await session.execute(select(TeamORM))).scalars().all()
+@teams_router.get("/", response_model=list[STeam])  # TODO: Зробить нормально; маладец, зробив; маладец, зробив х2
+async def get_teams(
+        session: Annotated[AsyncSession, Depends(get_async_session)]
+):
     members = (await session.execute(
-        select(TeamMemberORM, UserORM).join(UserORM, UserORM.id == TeamMemberORM.member_id)
-    )).all()
-
-    return [
-        STeam(
-            **team.__dict__,
-            members=[
-                STeamMember(
-                    user=SUser.from_orm(user),
-                    role=member.role
-                )
-                for member, user in members if member.team_id == team.id
-            ]
+        select(
+            TeamORM
+        ).options(
+            joinedload(
+                TeamORM.members
+            ).joinedload(
+                TeamMemberORM.user
+            )
         )
-        for team in teams
-    ]
+    )).unique().scalars().all()
+
+    return members
