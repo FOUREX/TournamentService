@@ -6,13 +6,16 @@ from .admin.router import routers as admin_routers
 from .users.router import routers as users_routers
 from .teams.router import routers as teams_routers
 from .matches.router import routers as matches_routers
+from .tournaments.router import routers as tournaments_routers
 
 
 app = FastAPI()
 
 origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://192.168.0.105:5174",
+    "http://26.85.150.40:5174",
 ]
 
 app.add_middleware(
@@ -34,3 +37,4 @@ app_include_routers(app, admin_routers)
 app_include_routers(app, users_routers)
 app_include_routers(app, teams_routers)
 app_include_routers(app, matches_routers)
+app_include_routers(app, tournaments_routers)

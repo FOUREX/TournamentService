@@ -27,7 +27,7 @@ class CookieTransport(BaseTransport):
             value=token,
             max_age=self.cookie_max_age,
             httponly=True,
-            secure=True,
+            # TODO: # secure=True,
             samesite=self.cookie_same_site
         )
 

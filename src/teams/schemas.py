@@ -2,12 +2,21 @@ from pydantic import BaseModel, ConfigDict
 
 from src.users.schemas import SUser
 
-from .enums import TeamMemberRole
+from .enums import ETeamMemberRole, ETeamJoinRequestType
+
+
+class FTeamID(BaseModel):
+    team_id: int
 
 
 class STeamMember(BaseModel):
     user: SUser
-    role: TeamMemberRole
+    role: ETeamMemberRole
+
+
+class STeamRequest(BaseModel):
+    user: SUser
+    type: ETeamJoinRequestType
 
 
 class STeam(BaseModel):
@@ -17,7 +26,15 @@ class STeam(BaseModel):
 
     id: int
     name: str
+    avatar_url: str | None
+
     members: list[STeamMember] = []
+    join_requests: list[STeamRequest] = []
+
+
+class STeamInvitation(BaseModel):
+    team: STeam
+    type: ETeamJoinRequestType
 
 
 class STeamAdd(BaseModel):

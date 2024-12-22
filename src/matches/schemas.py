@@ -2,9 +2,18 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from src.teams.schemas import STeam
+from src.teams.schemas import STeam, STeamMember
 
-from .enums import MatchType, MatchStatus
+from .enums import EMatchType, EMatchStatus
+
+
+class SMatchMember(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    team: STeam
+    stack: list[STeamMember]
 
 
 class SMatch(BaseModel):
@@ -13,19 +22,13 @@ class SMatch(BaseModel):
     )
 
     id: int
-    type: MatchType
-    status: MatchStatus
-    members: list[STeam] = []
+    type: EMatchType
+    status: EMatchStatus
+    members: list[SMatchMember] = []
     winner: STeam | None = None
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
-
-
-class SMatchMember(BaseModel):
-    model_config = ConfigDict(
-        from_attributes=True
-    )
 
 
 class SMatchAdd(BaseModel):
@@ -35,5 +38,5 @@ class SMatchAdd(BaseModel):
 
 class SMatchEdit(BaseModel):
     match_id: int
-    status: MatchStatus
+    status: EMatchStatus
     winner_id: int | None = None

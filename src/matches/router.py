@@ -2,18 +2,17 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import insert, select, update, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import auth_manager
 from src.database import get_async_session
 from src.users.models import UserORM
-from src.teams.schemas import SUser
 from src.teams.models import TeamORM, TeamMemberORM
-from src.teams.schemas import STeam, STeamMember
 
 from .schemas import SMatchAdd, SMatchEdit, SMatch
 from .models import MatchORM, MatchMemberORM
-from .enums import MatchType, MatchStatus
+from .enums import EMatchType, EMatchStatus
 
 
 match_router = APIRouter(prefix="/match", tags=["Matches"])
@@ -21,56 +20,35 @@ matches_router = APIRouter(prefix="/matches", tags=["Matches"])
 routers = (match_router, matches_router)
 
 
-@match_router.get("", response_model=Optional[SMatch])
+@match_router.get("/", response_model=Optional[SMatch])
 async def get_match(
         session: Annotated[AsyncSession, Depends(get_async_session)],
         id: int
 ):
-    match = (await session.execute(
+    return (await session.execute(
         select(
             MatchORM
+        ).options(
+            joinedload(
+                MatchORM.members
+            ).joinedload(
+                MatchMemberORM.team
+            ).joinedload(
+                TeamORM.members
+            ).joinedload(
+                TeamMemberORM.user
+            ),
+            joinedload(
+                MatchORM.members
+            ).joinedload(
+                MatchMemberORM.stack
+            ).joinedload(
+                TeamMemberORM.user
+            )
         ).where(
             MatchORM.id == id
-        )
-    )).scalar_one_or_none()
-
-    if match is None:
-        return None
-
-    teams = (await session.execute(
-        select(
-            TeamORM
-        ).where(
-            TeamORM.id.in_(
-                select(
-                    MatchMemberORM.team_id
-                ).where(
-                    MatchMemberORM.match_id == match.id
-                )
-            )
-        )
-    )).scalars().all()
-
-    members = (await session.execute(
-        select(TeamMemberORM, UserORM).join(UserORM, UserORM.id == TeamMemberORM.member_id)
-    )).all()
-
-    schema = SMatch.from_orm(match)
-    schema.members = [
-        STeam(
-            **team.__dict__,
-            members=[
-                STeamMember(
-                    user=SUser.from_orm(user),
-                    role=member.role
-                )
-                for member, user in members if member.team_id == team.id
-            ]
-        )
-        for team in teams
-    ]
-
-    return schema
+        ).limit(1)
+    )).unique().scalar_one_or_none()
 
 
 @match_router.patch("/", response_model=SMatch)
@@ -115,15 +93,15 @@ async def edit_match(
         bad_request_exc.detail = "The match already has this status"
         raise bad_request_exc
 
-    if data.status == MatchStatus.preparing:
+    if data.status == EMatchStatus.preparing:
         raise bad_request_exc
-    elif data.status == MatchStatus.in_progress:
-        if match.status != MatchStatus.preparing:
+    elif data.status == EMatchStatus.in_progress:
+        if match.status != EMatchStatus.preparing:
             raise bad_request_exc
 
         values = {"status": data.status, "started_at": func.now()}
-    elif data.status == MatchStatus.finished:
-        if match.status != MatchStatus.in_progress:
+    elif data.status == EMatchStatus.finished:
+        if match.status != EMatchStatus.in_progress:
             raise bad_request_exc
         if data.winner_id is None:
             bad_request_exc.detail = "Winner id is required"
@@ -133,8 +111,8 @@ async def edit_match(
             raise bad_request_exc
 
         values = {"status": data.status, "team_winner_id": data.winner_id, "finished_at": func.now()}
-    elif data.status == MatchStatus.cancelled:
-        if match.status == MatchStatus.finished:
+    elif data.status == EMatchStatus.cancelled:
+        if match.status == EMatchStatus.finished:
             raise bad_request_exc
 
         values = {"status": data.status, "team_winner_id": data.winner_id, "finished_at": func.now()}
@@ -184,7 +162,7 @@ async def post_competitive_match(
         insert(
             MatchORM
         ).values(
-            type=MatchType.competitive
+            type=EMatchType.competitive
         ).returning(
             MatchORM
         )
@@ -201,83 +179,43 @@ async def post_competitive_match(
         )
     )
 
-    schema = SMatch.from_orm(match)
-
-    members = (await session.execute(
-        select(TeamMemberORM, UserORM).join(UserORM, UserORM.id == TeamMemberORM.member_id)
-    )).all()
-
-    schema.members = [
-        STeam(
-            **team.__dict__,
-            members=[
-                STeamMember(
-                    user=SUser.from_orm(user),
-                    role=member.role
-                )
-                for member, user in members if member.team_id == team.id
-            ]
-        )
-        for team in teams
-    ]
-
     await session.commit()
 
-    return schema
+    r = (await session.execute(
+        select(
+            MatchORM
+        ).options(
+            joinedload(
+                MatchORM.members
+            ).joinedload(
+                TeamORM.members
+            ).joinedload(
+                TeamMemberORM.user
+            )
+        ).where(
+            MatchORM.id == match.id
+        ).limit(1)
+    )).unique().scalar_one_or_none()
+
+    return r
 
 
 @matches_router.get("/", response_model=list[SMatch])
 async def get_matches(
         session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
-    matches = (await session.execute(
+    return (await session.execute(
         select(
             MatchORM
+        ).options(
+            joinedload(
+                MatchORM.members
+            ).joinedload(
+                MatchMemberORM.team
+            ).joinedload(
+                TeamORM.members
+            ).joinedload(
+                TeamMemberORM.user
+            )
         )
-    )).scalars().all()
-
-    match_members = (await session.execute(
-        select(
-            MatchMemberORM
-        ).where(
-            MatchMemberORM.match_id.in_([match.id for match in matches])
-        )
-    )).scalars().all()
-
-    teams = (await session.execute(
-        select(
-            TeamORM
-        ).where(
-            TeamORM.id.in_([match_member.team_id for match_member in match_members])
-        )
-    )).scalars().all()
-
-    teams_members = (await session.execute(
-        select(
-            TeamMemberORM, UserORM
-        ).join(
-            UserORM, UserORM.id == TeamMemberORM.member_id
-        ).where(
-            TeamMemberORM.team_id.in_([team.id for team in teams])
-        )
-    )).all()
-
-    return [
-        SMatch(
-            **match.__dict__,
-            members=[
-                STeam(
-                    **team.__dict__,
-                    members=[
-                        STeamMember(
-                            user=SUser.from_orm(user),
-                            role=member.role
-                        )
-                        for member, user in teams_members if member.team_id == team.id
-                    ]
-                )
-                for team in teams
-            ]
-        )
-        for match in matches
-    ]
+    )).unique().scalars().all()

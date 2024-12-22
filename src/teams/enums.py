@@ -1,8 +1,13 @@
 from enum import IntEnum
 
 
-class TeamMemberRole(IntEnum):
-    owner = 0
-    admin = 1
-    member = 2
-    reserved = 3
+class ETeamMemberRole(IntEnum):
+    OWNER = 0
+    ADMIN = 1
+    MEMBER = 2
+    RESERVED = 3
+
+
+class ETeamJoinRequestType(IntEnum):
+    INVITE = 0
+    REQUEST = 1

@@ -13,6 +13,7 @@ class UserORM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column((String(length=48)), nullable=False, unique=True)
+    avatar_url: Mapped[str] = mapped_column((String(length=256)), nullable=True)
     first_name: Mapped[str] = mapped_column((String(length=48)), nullable=True)
     last_name: Mapped[str] = mapped_column((String(length=48)), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)

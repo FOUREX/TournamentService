@@ -19,5 +19,6 @@ class SUser(BaseModel):
 
     id: int
     name: str
+    avatar_url: str | None
     personal_data: SPersonalData = SPersonalData()
     created_at: datetime

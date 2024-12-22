@@ -7,3 +7,6 @@ psycopg2-binary==2.9.10
 asyncpg==0.30.0
 bcrypt==4.2.0
 pyjwt==2.9.0
+aiobotocore==2.16.0
+python-multipart==0.0.20
+pillow==11.0.0

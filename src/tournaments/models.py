@@ -21,7 +21,7 @@ class TournamentORM(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column((String(length=128)))
     description: Mapped[str] = mapped_column((String(length=512)), nullable=True)
-    avatar_url: Mapped[str] = mapped_column(String(length=256))
+    poster_url: Mapped[str] = mapped_column(String(length=256), nullable=True)
     status: Mapped[ETournamentStatus] = mapped_column(Integer, default=ETournamentStatus.PENDING)
 
     game_id: Mapped[str] = mapped_column(
@@ -29,7 +29,7 @@ class TournamentORM(Base):
     )
 
     game: Mapped[GameORM] = relationship()
-    members: Mapped[list[TeamORM]] = relationship(secondary="TournamentMember")
+    members: Mapped[list["TournamentMemberORM"]] = relationship()
 
 
 class TournamentMemberORM(Base):
@@ -46,6 +46,8 @@ class TournamentMemberORM(Base):
     )
 
     status: Mapped[ETournamentMemberStatus] = mapped_column(Integer, default=ETournamentMemberStatus.PENDING)
+
+    team: Mapped[TeamORM] = relationship()
 
 
 

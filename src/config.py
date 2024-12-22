@@ -13,3 +13,6 @@ DB_PORT = environ.get("DB_PORT")
 DB_NAME = environ.get("DB_NAME")
 
 JWT_SECRET = environ.get("JWT_SECRET")
+
+AWS_ACCESS_KEY = environ.get("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = environ.get("AWS_SECRET_KEY")

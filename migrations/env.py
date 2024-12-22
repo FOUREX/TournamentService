@@ -12,6 +12,7 @@ import src.teams.models
 import src.users.models
 import src.admin.models
 import src.matches.models
+import src.tournaments.models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

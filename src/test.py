@@ -101,7 +101,7 @@ async def _main():
             ).join(
                 UserORM, UserORM.id == TeamMemberORM.member_id
             ).where(
-                TeamMemberORM.team_id == team.id
+                TeamMemberORM.team_id == team.team_id
             )
         )).all()
 
