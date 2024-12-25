@@ -1,4 +1,5 @@
 from typing import Optional, Annotated, Sequence
+from random import randint
 
 from fastapi import APIRouter, Depends, Body, Response, HTTPException, status
 from sqlalchemy import select, insert, delete
@@ -76,18 +77,25 @@ async def post_team(
             detail="A team with this name already exists"
         )
 
+    data = team.dict(include=set(TeamORM.__dict__.keys()))
+    data["avatar_url"] = f"https://picsum.photos/{randint(64, 512)}/{randint(64, 512)}"
+
     created_team_id = (await session.execute(
         insert(
             TeamORM
         ).values(
-            team.dict(include=set(TeamORM.__dict__.keys()))
+            data
         ).returning(TeamORM.id)
     )).scalar_one()
 
     # TODO: Add members from team.members_ids
 
     await session.execute(
-        insert(TeamMemberORM).values(team_id=created_team_id, member_id=current_user.id, role=ETeamMemberRole.OWNER)
+        insert(TeamMemberORM).values(
+            team_id=created_team_id,
+            member_id=current_user.id,
+            role=ETeamMemberRole.OWNER
+        )
     )
 
     await session.commit()

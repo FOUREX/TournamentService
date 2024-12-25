@@ -1,4 +1,5 @@
 from typing import Annotated
+from random import randint
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, insert
@@ -32,6 +33,7 @@ async def register(data: SUserRegister, session: session_dependency):
 
     user_data = data.dict()
     user_data["password"] = Password.hash(user_data["password"])
+    user_data["avatar_url"] = f"https://picsum.photos/{randint(64, 512)}/{randint(64, 512)}"
 
     stmt = insert(UserORM).values(user_data).returning(UserORM)
     result = await session.execute(stmt)
