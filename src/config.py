@@ -3,7 +3,10 @@ from os import environ
 from dotenv import load_dotenv
 
 
-load_dotenv()
+dev = True
+
+
+load_dotenv(".env-dev" if dev else ".env")
 
 
 DB_USER = environ.get("DB_USER")

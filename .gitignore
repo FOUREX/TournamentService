@@ -1,1 +1,6 @@
 /.env
+/.env-dev
+/tests
+/migrations/versions/*
+/.pytest_cache
+/.idea
